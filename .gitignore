@@ -10,3 +10,5 @@
 *.phn
 
 *.pyc
+
+current_exp/trained_models/F01_DS

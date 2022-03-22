@@ -24,7 +24,7 @@ class ema_time_seg_mask(object):
         return ema_mask
 
 class ema_random_scale(object):
-    def __init__(self, prob = 0.5, [scale_min = 0.8, scale_max = 1.2]):
+    def __init__(self, prob = 0.5, scale_min = 0.8, scale_max = 1.2):
         self.prob = prob
         self.scale_min = scale_min     
         self.scale_max = scale_max    
@@ -180,7 +180,8 @@ class apply_delta_deltadelta(object):
 
         T, D = x.shape
         assert len(windows) > 0
-        combined_features = np.empty((T, D * len(windows)), dtype=x.dtype)
+     #   combined_features = np.empty((T, D * len(windows)), dtype=x.dtype)
+        combined_features = np.empty((T, D * len(windows)))
         for idx, (_, _, window) in enumerate(windows):
             combined_features[:, D * idx:D * idx + D] = self.delta(x, window)
         return combined_features

@@ -54,7 +54,7 @@ def augmentation_parsing(config, train_transform):
         ratio = config['random_scale']['ratio']
         scale_min = config['random_scale']['scale_range']
         scale_max = config['random_scale']['scale_max']
-        train_transform.append(ema_random_scale(ratio, [scale_min, scale_max])) 
+        train_transform.append(ema_random_scale(ratio, scale_min, scale_max)) 
         
     train_transform.append(apply_delta_deltadelta()) 
     
