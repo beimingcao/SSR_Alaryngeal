@@ -4,6 +4,19 @@ import torch
 import random
 import torchaudio
 
+class ema_random_scale(object):
+    def __init__(self, prob = 0.5, scale = 0.8):
+        self.prob = prob
+        self.scale = scale     
+   
+    def __call__(self, ema):
+        from scipy import ndimage
+        if random.random() < self.prob:
+            ema_align = np.empty([round(ema.shape[0]*scale), ema.shape[1]])  
+            for i in range(ema.shape[1]):
+                ema_align[:,i] = ndimage.zoom(ema[:,i], self.scale)
+        return ema
+
 class ema_sin_noise(object):
     def __init__(self, prob = 0.5, noise_energy_ratio = 0.1, noise_freq  = 40, fs=100):
         self.prob = prob
@@ -32,9 +45,8 @@ class ema_time_mask(object):
     def __call__(self, ema):
         masking = torchaudio.transforms.TimeMasking(time_mask_param=self.mask_num)
         if random.random() < self.prob:
-            for j in range(ema.shape[0]):
-                ema[j,0,:,:] = masking(ema[j,0,:,:])                 
-        return ema
+            ema = masking(torch.Tensor(ema.T))                 
+        return ema.T
         
         
 class ema_freq_mask(object):
@@ -45,9 +57,8 @@ class ema_freq_mask(object):
     def __call__(self, ema):
         masking = torchaudio.transforms.FrequencyMasking(freq_mask_param=self.mask_num)
         if random.random() < self.prob:
-            for j in range(ema.shape[0]):
-                ema[j,0,:,:] = masking(ema[j,0,:,:])                      
-        return ema
+            ema = masking(torch.Tensor(ema.T))                     
+        return ema.T
 
 class ema_random_rotate(object):
     def __init__(self, prob = 0.5, angle_range = [-np.pi/18, np.pi/18]):
@@ -76,7 +87,7 @@ class ema_random_rotate(object):
     def __call__(self, ema):
         if random.random() < self.prob:
             ema = self.translation(ema)
-            angle = random.choice(self.angle_range)
+            angle = (random.randint(self.angle_range[0], self.angle_range[1])*np.pi)/180
             ema = self.rotation(ema, angle)                      
         return ema
         

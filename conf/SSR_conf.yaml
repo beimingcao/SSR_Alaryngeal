@@ -12,7 +12,7 @@ data_setup:
 data_augmentation:
   random_sin_noise_inj: True
   random_rotate: False
-  random_noise: False
+  random_stretch: False
   random_time_mask: False
   random_freq_mask: False
   
