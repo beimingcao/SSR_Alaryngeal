@@ -24,13 +24,14 @@ class ema_time_seg_mask(object):
         return ema_mask
 
 class ema_random_scale(object):
-    def __init__(self, prob = 0.5, scale = 0.8):
+    def __init__(self, prob = 0.5, [scale_min = 0.8, scale_max = 1.2]):
         self.prob = prob
-        self.scale = scale     
-   
+        self.scale_min = scale_min     
+        self.scale_max = scale_max    
     def __call__(self, ema):
         from scipy import ndimage
         if random.random() < self.prob:
+            scale = random.uniform(self.scale_min, self.scale_max)
             ema_align = np.empty([round(ema.shape[0]*scale), ema.shape[1]])  
             for i in range(ema.shape[1]):
                 ema_align[:,i] = ndimage.zoom(ema[:,i], self.scale)

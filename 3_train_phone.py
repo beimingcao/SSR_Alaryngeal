@@ -38,21 +38,23 @@ def augmentation_parsing(config, train_transform):
     normalize_input = config['articulatory_data']['normalize_input']    
 
     if random_sin_noise_inj == True:
-        ratio = 0.5
-        noise_energy_ratio = 0.05
-        noise_freq = 20
+        ratio = config['random_sin_noise_inj']['ratio']
+        noise_energy_ratio = config['random_sin_noise_inj']['noise_energy_ratio']
+        noise_freq = config['random_sin_noise_inj']['noise_freq']
         fs = 100
         train_transform.append(ema_sin_noise(ratio, noise_energy_ratio, noise_freq, fs)) 
 
     if random_rotate_apply == True:
-        ratio = 0.5
-        angle = [-30, 30]
-        train_transform.append(ema_random_rotate(ratio,  angle)) 
+        ratio = config['random_rotate_apply']['ratio']
+        r_min = config['random_rotate_apply']['r_min']
+        r_max = config['random_rotate_apply']['r_max']
+        train_transform.append(ema_random_rotate(ratio,  [r_min, r_max])) 
 
     if random_scale == True:
-        ratio = 0.5
-        scale = 0.8
-        train_transform.append(ema_random_scale(ratio, scale)) 
+        ratio = config['random_scale']['ratio']
+        scale_min = config['random_scale']['scale_range']
+        scale_max = config['random_scale']['scale_max']
+        train_transform.append(ema_random_scale(ratio, [scale_min, scale_max])) 
         
     train_transform.append(apply_delta_deltadelta()) 
     
@@ -78,19 +80,19 @@ def augmentation_parsing(config, train_transform):
         train_transform.append(apply_MVN(EMA_mean, EMA_std))
 
     if random_time_mask == True:
-        ratio = 0.8
-        mask_num = 10
+        ratio = config['random_time_mask']['ratio']
+        mask_num = config['random_time_mask']['mask_num']
         train_transform.append(ema_time_mask(ratio, mask_num))
 
     if random_freq_mask == True:
-        ratio = 0.8
-        mask_num = 8
+        ratio = config['random_freq_mask']['ratio']
+        mask_num = config['random_freq_mask']['mask_num']
         train_transform.append(ema_freq_mask(ratio, mask_num))
 
     if random_time_seg_mask == True:
-        ratio = 0.5
-        mask_num = 5
-        mask_length = 2
+        ratio = config['random_time_seg_mask']['ratio']
+        mask_num = config['random_time_seg_mask']['mask_num']
+        mask_length = config['random_time_seg_mask']['mask_length']
         train_transform.append(ema_time_seg_mask(ratio, mask_num, mask_length))    
         
     return train_transform, EMA_mean, EMA_std
