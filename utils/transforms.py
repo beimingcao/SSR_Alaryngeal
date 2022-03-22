@@ -4,6 +4,25 @@ import torch
 import random
 import torchaudio
 
+class ema_time_seg_mask(object):
+    def __init__(self, prob = 0.5, mask_num = 10, mask_length = 10):
+        self.prob = prob
+        self.mask_num = mask_num
+        self.mask_length = mask_length
+           
+    def __call__(self, ema):
+        if random.random() < self.prob:
+            ema_mask = ema
+            max_possible_point = int(ema.shape[0]/self.mask_length)
+            center_indices = random.sample(range(1,max_possible_point), self.mask_num)
+            for c in center_indices:
+                start = c*self.mask_length-int(self.mask_length/2)
+                end = c*self.mask_length+int(self.mask_length/2)
+                col = range(start, end)
+                ema_mask[col,:] = 0.0
+               
+        return ema_mask
+
 class ema_random_scale(object):
     def __init__(self, prob = 0.5, scale = 0.8):
         self.prob = prob

@@ -13,7 +13,7 @@ from utils.utils import EarlyStopping, IterMeter, data_processing_DeepSpeech
 import torch.nn.functional as F
 
 import random
-from utils.transforms import ema_random_rotate, ema_time_mask, ema_freq_mask, ema_sin_noise
+from utils.transforms import ema_random_rotate, ema_time_mask, ema_freq_mask, ema_sin_noise, ema_random_scale, ema_time_seg_mask
 from utils.transforms import apply_delta_deltadelta, Transform_Compose
 from utils.transforms import apply_MVN
 import numpy as np
@@ -26,6 +26,75 @@ torch.cuda.manual_seed_all(seed)
 random.seed(seed)
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
+
+def augmentation_parsing(config, train_transform):
+
+    random_sin_noise_inj = config['data_augmentation']['random_sin_noise_inj']
+    random_rotate_apply = config['data_augmentation']['random_rotate']
+    random_time_mask = config['data_augmentation']['random_time_mask']
+    random_freq_mask = config['data_augmentation']['random_freq_mask']
+    random_scale = config['data_augmentation']['random_scale']
+    random_time_seg_mask = config['data_augmentation']['random_time_seg_mask']   
+    normalize_input = config['articulatory_data']['normalize_input']    
+
+    if random_sin_noise_inj == True:
+        ratio = 0.5
+        noise_energy_ratio = 0.05
+        noise_freq = 20
+        fs = 100
+        train_transform.append(ema_sin_noise(ratio, noise_energy_ratio, noise_freq, fs)) 
+
+    if random_rotate_apply == True:
+        ratio = 0.5
+        angle = [-30, 30]
+        train_transform.append(ema_random_rotate(ratio,  angle)) 
+
+    if random_scale == True:
+        ratio = 0.5
+        scale = 0.8
+        train_transform.append(ema_random_scale(ratio, scale)) 
+        
+    train_transform.append(apply_delta_deltadelta()) 
+    
+    if normalize_input == True:
+        norm_transform = [apply_delta_deltadelta()]
+        norm_transforms_all = Transform_Compose(norm_transform)
+
+        train_loader_norm = torch.utils.data.DataLoader(dataset=train_dataset,
+                                    batch_size=1,
+                                    shuffle=True,
+                                    collate_fn=lambda x: data_processing_DeepSpeech(x, transforms = norm_transforms_all))
+        EMA_all = {}
+        i = 0
+        for batch_idx, _data in enumerate(train_loader_norm):
+            file_id, EMA, labels, input_lengths, label_lengths = _data 
+            ema = EMA[0][0].T
+            EMA_all[i] = ema
+            i+=1
+
+        EMA_block = np.concatenate([EMA_all[x] for x in EMA_all], 0)
+        EMA_mean, EMA_std  = np.mean(EMA_block, 0), np.std(EMA_block, 0)
+        
+        train_transform.append(apply_MVN(EMA_mean, EMA_std))
+
+    if random_time_mask == True:
+        ratio = 0.8
+        mask_num = 10
+        train_transform.append(ema_time_mask(ratio, mask_num))
+
+    if random_freq_mask == True:
+        ratio = 0.8
+        mask_num = 8
+        train_transform.append(ema_freq_mask(ratio, mask_num))
+
+    if random_time_seg_mask == True:
+        ratio = 0.5
+        mask_num = 5
+        mask_length = 2
+        train_transform.append(ema_time_seg_mask(ratio, mask_num, mask_length))    
+        
+    return train_transform, EMA_mean, EMA_std
+    
 
 
 def train_DeepSpeech(test_SPK, train_dataset, valid_dataset, exp_output_folder, args):
@@ -54,69 +123,23 @@ def train_DeepSpeech(test_SPK, train_dataset, valid_dataset, exp_output_folder, 
     epochs = config['deep_speech_setup']['epochs']
     early_stop = config['deep_speech_setup']['early_stop']
     patient = config['deep_speech_setup']['patient']
-    normalize_input = config['articulatory_data']['normalize_input']
     train_out_folder = os.path.join(exp_output_folder, 'training')
     if not os.path.exists(train_out_folder):
         os.makedirs(train_out_folder)
     results = os.path.join(train_out_folder, test_SPK + '_train.txt')
     
     ### Model training ###
-    random_sin_noise_inj = config['data_augmentation']['random_sin_noise_inj']
-    random_rotate_apply = config['data_augmentation']['random_rotate']
-    random_noise_add = config['data_augmentation']['random_noise']
-    random_time_mask = config['data_augmentation']['random_time_mask']
-    random_freq_mask = config['data_augmentation']['random_freq_mask']
+
     
     train_transform = []
     valid_transform = []
-    train_transform.append(apply_delta_deltadelta())
-    valid_transform.append(apply_delta_deltadelta())
     
-    if normalize_input == True:
-        norm_transform = [apply_delta_deltadelta()]
-        norm_transforms_all = Transform_Compose(norm_transform)
-
-        train_loader_norm = torch.utils.data.DataLoader(dataset=train_dataset,
-                                    batch_size=1,
-                                    shuffle=True,
-                                    collate_fn=lambda x: data_processing_DeepSpeech(x, transforms = norm_transforms_all))
-
-        EMA_all = {}
-        i = 0
-        for batch_idx, _data in enumerate(train_loader_norm):
-            file_id, EMA, labels, input_lengths, label_lengths = _data 
-            ema = EMA[0][0].T
-            EMA_all[i] = ema
-            i+=1
-
-        EMA_block = np.concatenate([EMA_all[x] for x in EMA_all], 0)
-        EMA_mean, EMA_std  = np.mean(EMA_block, 0), np.std(EMA_block, 0)
+    train_transform, EMA_mean, EMA_std = augmentation_parsing(config, train_transform)
+    
+    valid_transform.append(apply_delta_deltadelta())
+    valid_transform.append(apply_MVN(EMA_mean, EMA_std))
         
-        train_transform.append(apply_MVN(EMA_mean, EMA_std))
-        valid_transform.append(apply_MVN(EMA_mean, EMA_std))
-        
-        if random_sin_noise_inj == True:
-            ratio = config['random_sin_noise_inj']['ratio']
-            noise_energy_ratio = config['random_sin_noise_inj']['noise_energy_ratio']                   
-            noise_freq = config['random_sin_noise_inj']['noise_freq']
-            fs = config['random_sin_noise_inj']['fs']   
-            train_transform.append(ema_sin_noise(ratio,  noise_energy_ratio,  noise_freq, fs))              
-                            
-        if random_rotate_apply == True:                
-            ratio = config['random_rotate']['ratio']
-            r_min = config['random_rotate']['r_min']
-            r_max = config['random_rotate']['r_max']                                   
-            train_transform.append(ema_random_rotate(prob = ratio, angle_range = [r_min, r_max]))   
-            
-        if random_time_mask == True:             
-            ratio = config['random_time_mask']['ratio']
-            mask_frame_num = config['random_time_mask']['mask_num']               
-            train_transform.append(ema_time_mask(prob = ratio, mask_num = mask_frame_num))  
-            
-        if random_freq_mask == True:             
-            ratio = config['random_freq_mask']['ratio']
-            mask_frame_num = config['random_freq_mask']['mask_num']
-            train_transform.append(ema_freq_mask(prob = ratio, mask_num = mask_frame_num)) 
+
 
     train_transforms_all = Transform_Compose(train_transform)
     valid_transforms_all = Transform_Compose(valid_transform)
